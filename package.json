@@ -1,0 +1,33 @@
+{
+  "name": "letmegrab-assignment",
+  "version": "1.0.0",
+  "description": "apis for ecommerce platform",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "prisma:generate": "prisma generate --schema=./src/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate dev --schema=./src/prisma/schema.prisma",
+    "prisma:push": "prisma db push --schema=./src/prisma/schema.prisma",
+    "prisma:studio": "prisma studio --schema=./src/prisma/schema.prisma",
+    "seed": "node src/prisma/seed/seed.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "@supabase/supabase-js": "^2.81.1",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "joi": "^18.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11",
+    "prisma": "^6.19.0"
+  }
+}
