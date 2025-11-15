@@ -33,7 +33,7 @@ const register = async (req, res, next) => {
       where: { code: welcomeCouponCode },
     });
 
-    // If welcome coupon doesn't exist, create it
+    // If welcome coupon doesn't exist, create it with usage limits
     if (!welcomeCoupon) {
       welcomeCoupon = await prisma.coupon.create({
         data: {
@@ -42,6 +42,9 @@ const register = async (req, res, next) => {
           discountValue: 10,
           minPurchase: 0,
           maxDiscount: 100,
+          usageLimitPerUser: 1, // Each user can use only once
+          totalUsageLimit: null, // No global limit - all users can get it
+          currentUsageCount: 0,
           validFrom: new Date(),
           validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
           isActive: true,

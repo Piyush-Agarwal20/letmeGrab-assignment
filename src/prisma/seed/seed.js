@@ -7,7 +7,7 @@ async function main() {
   console.log('🌱 Starting database seeding...');
 
   try {
-    // 1. Create Welcome Coupon
+    // 1. Create Welcome Coupon (One-time use per user)
     console.log('Creating welcome coupon...');
     const welcomeCoupon = await prisma.coupon.upsert({
       where: { code: 'WELCOME10' },
@@ -18,12 +18,15 @@ async function main() {
         discountValue: 10,
         minPurchase: 0,
         maxDiscount: 100,
+        usageLimitPerUser: 1, // One-time use per user
+        totalUsageLimit: null, // No global limit
+        currentUsageCount: 0,
         validFrom: new Date(),
         validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year
         isActive: true,
       },
     });
-    console.log('✅ Welcome coupon created:', welcomeCoupon.code);
+    console.log('✅ Welcome coupon created:', welcomeCoupon.code, '(1 use per user)');
 
     // 2. Create Additional Coupons for testing
     console.log('Creating additional coupons...');
@@ -37,12 +40,15 @@ async function main() {
         discountValue: 50,
         minPurchase: 200,
         maxDiscount: null,
+        usageLimitPerUser: 3, // Can use 3 times per user
+        totalUsageLimit: null,
+        currentUsageCount: 0,
         validFrom: new Date(),
         validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         isActive: true,
       },
     });
-    console.log('✅ Fixed coupon created:', fixedCoupon.code);
+    console.log('✅ Fixed coupon created:', fixedCoupon.code, '(3 uses per user)');
 
     const percentageCoupon = await prisma.coupon.upsert({
       where: { code: 'DISCOUNT20' },
@@ -53,12 +59,15 @@ async function main() {
         discountValue: 20,
         minPurchase: 500,
         maxDiscount: 200,
+        usageLimitPerUser: null, // Unlimited per user
+        totalUsageLimit: 100, // Global limit: first 100 redemptions
+        currentUsageCount: 0,
         validFrom: new Date(),
         validTo: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         isActive: true,
       },
     });
-    console.log('✅ Percentage coupon created:', percentageCoupon.code);
+    console.log('✅ Percentage coupon created:', percentageCoupon.code, '(unlimited per user, 100 global limit)');
 
     // 3. Create Sample Seller
     console.log('Creating sample seller...');
