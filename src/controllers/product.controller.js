@@ -2,12 +2,7 @@ const prisma = require('../config/database');
 const { sendSuccess, sendError } = require('../utils/response.util');
 const { normalizeProductName, formatProductName } = require('../utils/string.util');
 
-/**
- * Add a new product
- * - Only sellers can add products
- * - Automatically links product to the authenticated seller
- * - Checks if product with same name already exists for this seller
- */
+
 const addProduct = async (req, res, next) => {
   try {
     const { name, description, price, stock } = req.body;
@@ -85,9 +80,7 @@ const addProduct = async (req, res, next) => {
   }
 };
 
-/**
- * Get all products for the authenticated seller
- */
+
 const getMyProducts = async (req, res, next) => {
   try {
     const sellerId = req.seller.id;
@@ -127,10 +120,7 @@ const getMyProducts = async (req, res, next) => {
   }
 };
 
-/**
- * Get single product details
- * - Only the seller who owns the product can view it
- */
+
 const getProduct = async (req, res, next) => {
   try {
     const { productId } = req.params;
@@ -175,11 +165,7 @@ const getProduct = async (req, res, next) => {
   }
 };
 
-/**
- * Update product details
- * - Only the seller who owns the product can update it
- * - Can update: name, description, price, stock, isActive
- */
+
 const updateProduct = async (req, res, next) => {
   try {
     const { productId } = req.params;
@@ -250,11 +236,7 @@ const updateProduct = async (req, res, next) => {
   }
 };
 
-/**
- * Update product stock
- * - Only the seller who owns the product can update stock
- * - Dedicated endpoint for quick stock updates
- */
+
 const updateStock = async (req, res, next) => {
   try {
     const { productId } = req.params;
@@ -297,11 +279,6 @@ const updateStock = async (req, res, next) => {
   }
 };
 
-/**
- * Delete product (soft delete)
- * - Sets isActive to false instead of deleting from database
- * - Only the seller who owns the product can delete it
- */
 const deleteProduct = async (req, res, next) => {
   try {
     const { productId } = req.params;
@@ -331,13 +308,7 @@ const deleteProduct = async (req, res, next) => {
   }
 };
 
-/**
- * Get all active products (Public - for users)
- * - Returns all active products from all sellers
- * - Supports search by name/description
- * - Supports pagination
- * - No authentication required
- */
+
 const getAllProducts = async (req, res, next) => {
   try {
     const {
@@ -426,11 +397,7 @@ const getAllProducts = async (req, res, next) => {
   }
 };
 
-/**
- * Get single product details by ID (Public - for users)
- * - Returns active product details
- * - No authentication required
- */
+
 const getProductById = async (req, res, next) => {
   try {
     const { productId } = req.params;

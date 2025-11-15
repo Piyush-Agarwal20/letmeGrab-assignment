@@ -1,12 +1,7 @@
 const prisma = require('../config/database');
 const { sendSuccess, sendError } = require('../utils/response.util');
 
-/**
- * Get all active coupons (Public)
- * - Returns all currently active and valid coupons
- * - No authentication required
- * - Useful for displaying available promotions to all users
- */
+
 const getAllCoupons = async (req, res, next) => {
   try {
     const now = new Date();
@@ -65,12 +60,7 @@ const getAllCoupons = async (req, res, next) => {
   }
 };
 
-/**
- * Get user's available coupons (Authenticated)
- * - Returns coupons available for the authenticated user
- * - Shows usage status and remaining uses per user
- * - Only shows coupons the user can still use
- */
+
 const getUserCoupons = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -160,11 +150,7 @@ const getUserCoupons = async (req, res, next) => {
   }
 };
 
-/**
- * Get coupon details by code
- * - Returns specific coupon details
- * - No authentication required (public)
- */
+
 const getCouponByCode = async (req, res, next) => {
   try {
     const { code } = req.params;

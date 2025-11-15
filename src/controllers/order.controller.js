@@ -1,14 +1,7 @@
 const prisma = require('../config/database');
 const { sendSuccess, sendError } = require('../utils/response.util');
 
-/**
- * Calculate order total with discounts
- * - Validate cart is not empty
- * - Calculate subtotal
- * - Apply coupon discount if provided
- * - Apply wallet points if requested
- * - Return breakdown of costs
- */
+
 const calculateOrder = async (req, res, next) => {
   try {
     const { couponCode, useWalletPoints, walletPointsToUse } = req.body;
@@ -190,16 +183,7 @@ const calculateOrder = async (req, res, next) => {
   }
 };
 
-/**
- * Place order
- * - Validate and calculate order
- * - Deduct stock from products
- * - Create order and order items
- * - Deduct wallet points if used
- * - Update coupon usage
- * - Clear cart
- * - Create transaction record
- */
+
 const placeOrder = async (req, res, next) => {
   try {
     const { couponCode, useWalletPoints, walletPointsToUse } = req.body;
@@ -475,12 +459,7 @@ const placeOrder = async (req, res, next) => {
   }
 };
 
-/**
- * Update payment status
- * - Update order payment status (SUCCESS/FAILED)
- * - Update order status accordingly
- * - Requires authentication
- */
+
 const updatePaymentStatus = async (req, res, next) => {
   try {
     const { orderId } = req.params;
@@ -608,12 +587,7 @@ const updatePaymentStatus = async (req, res, next) => {
   }
 };
 
-/**
- * Get user's orders
- * - Returns all orders for the authenticated user
- * - Supports filtering by status
- * - Requires authentication
- */
+
 const getUserOrders = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -671,11 +645,7 @@ const getUserOrders = async (req, res, next) => {
   }
 };
 
-/**
- * Get single order details
- * - Returns detailed information about a specific order
- * - Requires authentication
- */
+
 const getOrderById = async (req, res, next) => {
   try {
     const { orderId } = req.params;

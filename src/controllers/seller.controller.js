@@ -3,12 +3,7 @@ const prisma = require('../config/database');
 const { generateToken } = require('../utils/jwt.util');
 const { sendSuccess, sendError } = require('../utils/response.util');
 
-/**
- * Register a new seller
- * - Hash password
- * - Create seller account
- * - Return JWT token
- */
+
 const register = async (req, res, next) => {
   try {
     const { email, password, name, shopName } = req.body;
@@ -58,11 +53,7 @@ const register = async (req, res, next) => {
   }
 };
 
-/**
- * Login seller
- * - Verify credentials
- * - Return JWT token
- */
+
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;

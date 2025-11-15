@@ -2,13 +2,7 @@ const prisma = require('../config/database');
 const { sendSuccess, sendError } = require('../utils/response.util');
 const { formatProductName } = require('../utils/string.util');
 
-/**
- * Add product to cart
- * - Check if product exists and is active
- * - Check if enough stock available
- * - If product already in cart, update quantity
- * - Otherwise, add new cart item
- */
+
 const addToCart = async (req, res, next) => {
   try {
     const { productId, quantity } = req.body;
@@ -126,12 +120,7 @@ const addToCart = async (req, res, next) => {
   }
 };
 
-/**
- * Get user's cart
- * - Returns all cart items with product details
- * - Calculates subtotal for each item
- * - Calculates total cart value
- */
+
 const getCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -180,11 +169,7 @@ const getCart = async (req, res, next) => {
   }
 };
 
-/**
- * Update cart item quantity
- * - Check if enough stock available
- * - Update quantity
- */
+
 const updateCartQuantity = async (req, res, next) => {
   try {
     const { cartId } = req.params;
@@ -252,9 +237,7 @@ const updateCartQuantity = async (req, res, next) => {
   }
 };
 
-/**
- * Remove item from cart
- */
+
 const removeFromCart = async (req, res, next) => {
   try {
     const { cartId } = req.params;
@@ -283,9 +266,7 @@ const removeFromCart = async (req, res, next) => {
   }
 };
 
-/**
- * Clear entire cart
- */
+
 const clearCart = async (req, res, next) => {
   try {
     const userId = req.user.id;

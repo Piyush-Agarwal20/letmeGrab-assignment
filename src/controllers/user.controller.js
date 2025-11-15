@@ -3,14 +3,6 @@ const prisma = require('../config/database');
 const { generateToken } = require('../utils/jwt.util');
 const { sendSuccess, sendError } = require('../utils/response.util');
 
-/**
- * Register a new user
- * - Hash password
- * - Create user account
- * - Assign welcome wallet points
- * - Assign welcome coupon
- * - Return JWT token
- */
 const register = async (req, res, next) => {
   try {
     const { email, password, name } = req.body;
@@ -96,11 +88,6 @@ const register = async (req, res, next) => {
   }
 };
 
-/**
- * Login user
- * - Verify credentials
- * - Return JWT token
- */
 const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -142,11 +129,6 @@ const login = async (req, res, next) => {
   }
 };
 
-/**
- * Get user profile
- * - Returns authenticated user's profile details
- * - Requires authentication
- */
 const getProfile = async (req, res, next) => {
   try {
     const userId = req.user.id;
@@ -178,11 +160,6 @@ const getProfile = async (req, res, next) => {
   }
 };
 
-/**
- * Get user wallet points
- * - Returns wallet balance and transaction history
- * - Requires authentication
- */
 const getWalletPoints = async (req, res, next) => {
   try {
     const userId = req.user.id;
