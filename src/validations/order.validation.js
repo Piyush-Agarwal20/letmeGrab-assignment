@@ -62,7 +62,23 @@ const placeOrderSchema = Joi.object({
     }),
 });
 
+/**
+ * Update Payment Status Validation Schema
+ * - paymentStatus: Required, must be SUCCESS or FAILED
+ */
+const updatePaymentStatusSchema = Joi.object({
+  paymentStatus: Joi.string()
+    .valid('SUCCESS', 'FAILED')
+    .required()
+    .messages({
+      'string.base': 'Payment status must be a string',
+      'any.only': 'Payment status must be either SUCCESS or FAILED',
+      'any.required': 'Payment status is required',
+    }),
+});
+
 module.exports = {
   calculateOrderSchema,
   placeOrderSchema,
+  updatePaymentStatusSchema,
 };

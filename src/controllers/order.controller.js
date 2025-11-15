@@ -475,7 +475,277 @@ const placeOrder = async (req, res, next) => {
   }
 };
 
+/**
+ * Update payment status
+ * - Update order payment status (SUCCESS/FAILED)
+ * - Update order status accordingly
+ * - Requires authentication
+ */
+const updatePaymentStatus = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentStatus } = req.body;
+    const userId = req.user.id;
+
+    // Validate payment status
+    if (!['SUCCESS', 'FAILED'].includes(paymentStatus)) {
+      return sendError(res, 400, 'Invalid payment status. Must be SUCCESS or FAILED');
+    }
+
+    // Find order and verify ownership
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId,
+      },
+    });
+
+    if (!order) {
+      return sendError(res, 404, 'Order not found');
+    }
+
+    // Check if payment is already completed
+    if (order.paymentStatus === 'SUCCESS') {
+      return sendError(res, 400, 'Payment has already been completed for this order');
+    }
+
+    // Update order and transaction status
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // Update order status
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          paymentStatus,
+          orderStatus: paymentStatus === 'SUCCESS' ? 'CONFIRMED' : 'CANCELLED',
+        },
+        include: {
+          orderItems: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Update transaction status
+      await tx.transaction.updateMany({
+        where: { orderId },
+        data: { paymentStatus },
+      });
+
+      // If payment failed, restore stock and wallet points
+      if (paymentStatus === 'FAILED') {
+        // Restore product stock
+        for (const item of updated.orderItems) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stock: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+
+        // Restore wallet points
+        if (updated.walletPointsUsed > 0) {
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              walletPoints: {
+                increment: parseFloat(updated.walletPointsUsed),
+              },
+            },
+          });
+        }
+
+        // Restore coupon usage if coupon was used
+        if (updated.couponId) {
+          await tx.coupon.update({
+            where: { id: updated.couponId },
+            data: {
+              currentUsageCount: {
+                decrement: 1,
+              },
+            },
+          });
+
+          // Restore user coupon usage
+          await tx.userCoupon.updateMany({
+            where: {
+              userId,
+              couponId: updated.couponId,
+            },
+            data: {
+              usageCount: {
+                decrement: 1,
+              },
+            },
+          });
+        }
+      }
+
+      return updated;
+    });
+
+    return sendSuccess(res, 200, 'Payment status updated successfully', {
+      order: {
+        orderId: updatedOrder.id,
+        paymentStatus: updatedOrder.paymentStatus,
+        orderStatus: updatedOrder.orderStatus,
+        totalAmount: parseFloat(updatedOrder.totalAmount),
+        finalAmount: parseFloat(updatedOrder.finalAmount),
+        updatedAt: updatedOrder.updatedAt,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get user's orders
+ * - Returns all orders for the authenticated user
+ * - Supports filtering by status
+ * - Requires authentication
+ */
+const getUserOrders = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const { status } = req.query;
+
+    const where = { userId };
+
+    // Add status filter if provided
+    if (status && ['PENDING', 'CONFIRMED', 'CANCELLED', 'DELIVERED'].includes(status)) {
+      where.orderStatus = status;
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: {
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    const formattedOrders = orders.map(order => ({
+      orderId: order.id,
+      totalAmount: parseFloat(order.totalAmount),
+      couponDiscount: parseFloat(order.couponDiscount),
+      walletPointsUsed: parseFloat(order.walletPointsUsed),
+      finalAmount: parseFloat(order.finalAmount),
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      createdAt: order.createdAt,
+      items: order.orderItems.map(item => ({
+        productId: item.productId,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+      })),
+    }));
+
+    return sendSuccess(res, 200, 'Orders retrieved successfully', {
+      orders: formattedOrders,
+      count: formattedOrders.length,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get single order details
+ * - Returns detailed information about a specific order
+ * - Requires authentication
+ */
+const getOrderById = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.id;
+
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId,
+      },
+      include: {
+        orderItems: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                price: true,
+              },
+            },
+          },
+        },
+        coupon: {
+          select: {
+            code: true,
+            discountType: true,
+            discountValue: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      return sendError(res, 404, 'Order not found');
+    }
+
+    const formattedOrder = {
+      orderId: order.id,
+      totalAmount: parseFloat(order.totalAmount),
+      couponDiscount: parseFloat(order.couponDiscount),
+      walletPointsUsed: parseFloat(order.walletPointsUsed),
+      finalAmount: parseFloat(order.finalAmount),
+      paymentStatus: order.paymentStatus,
+      orderStatus: order.orderStatus,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      coupon: order.coupon ? {
+        code: order.coupon.code,
+        discountType: order.coupon.discountType,
+        discountValue: parseFloat(order.coupon.discountValue),
+      } : null,
+      items: order.orderItems.map(item => ({
+        productId: item.productId,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: parseFloat(item.price),
+        subtotal: parseFloat(item.price) * item.quantity,
+      })),
+    };
+
+    return sendSuccess(res, 200, 'Order retrieved successfully', { order: formattedOrder });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   calculateOrder,
   placeOrder,
+  updatePaymentStatus,
+  getUserOrders,
+  getOrderById,
 };
