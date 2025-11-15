@@ -5,6 +5,8 @@ const morgan = require('morgan');
 
 // Import routes
 const userRoutes = require('./routes/user.routes');
+const sellerRoutes = require('./routes/seller.routes');
+const productRoutes = require('./routes/product.routes');
 
 // Import middleware
 const errorMiddleware = require('./middleware/error.middleware');
@@ -30,8 +32,12 @@ app.get('/', (req, res) => {
   });
 });
 
+// API Routes
 app.use('/api/users', userRoutes);
+app.use('/api/sellers', sellerRoutes);
+app.use('/api/products', productRoutes);
 
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
