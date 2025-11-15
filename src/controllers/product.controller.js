@@ -331,6 +331,147 @@ const deleteProduct = async (req, res, next) => {
   }
 };
 
+/**
+ * Get all active products (Public - for users)
+ * - Returns all active products from all sellers
+ * - Supports search by name/description
+ * - Supports pagination
+ * - No authentication required
+ */
+const getAllProducts = async (req, res, next) => {
+  try {
+    const {
+      search = '',
+      page = 1,
+      limit = 10,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Convert to numbers
+    const pageNum = parseInt(page, 10);
+    const limitNum = parseInt(limit, 10);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Validate pagination params
+    if (pageNum < 1 || limitNum < 1 || limitNum > 100) {
+      return sendError(res, 400, 'Invalid pagination parameters. Page must be >= 1 and limit must be between 1 and 100');
+    }
+
+    // Build where clause
+    const where = {
+      isActive: true,
+    };
+
+    // Add search filter if provided
+    if (search) {
+      const normalizedSearch = normalizeProductName(search);
+      where.OR = [
+        { name: { contains: normalizedSearch } },
+        { description: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Validate sort field
+    const allowedSortFields = ['createdAt', 'price', 'name'];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const sortDirection = sortOrder === 'asc' ? 'asc' : 'desc';
+
+    // Get total count for pagination
+    const totalCount = await prisma.product.count({ where });
+
+    // Fetch products with pagination
+    const products = await prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        stock: true,
+        createdAt: true,
+        seller: {
+          select: {
+            id: true,
+            shopName: true,
+          },
+        },
+      },
+      orderBy: {
+        [sortField]: sortDirection,
+      },
+      skip,
+      take: limitNum,
+    });
+
+    // Format product names for display
+    const formattedProducts = products.map(product => ({
+      ...product,
+      name: formatProductName(product.name),
+    }));
+
+    return sendSuccess(res, 200, 'Products retrieved successfully', {
+      products: formattedProducts,
+      pagination: {
+        total: totalCount,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(totalCount / limitNum),
+        hasNext: pageNum < Math.ceil(totalCount / limitNum),
+        hasPrev: pageNum > 1,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get single product details by ID (Public - for users)
+ * - Returns active product details
+ * - No authentication required
+ */
+const getProductById = async (req, res, next) => {
+  try {
+    const { productId } = req.params;
+
+    const product = await prisma.product.findFirst({
+      where: {
+        id: productId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        price: true,
+        stock: true,
+        createdAt: true,
+        seller: {
+          select: {
+            id: true,
+            shopName: true,
+          },
+        },
+      },
+    });
+
+    if (!product) {
+      return sendError(res, 404, 'Product not found');
+    }
+
+    // Format product name for display
+    const formattedProduct = {
+      ...product,
+      name: formatProductName(product.name),
+    };
+
+    return sendSuccess(res, 200, 'Product retrieved successfully', { product: formattedProduct });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   addProduct,
   getMyProducts,
@@ -338,4 +479,6 @@ module.exports = {
   updateProduct,
   updateStock,
   deleteProduct,
+  getAllProducts,
+  getProductById,
 };

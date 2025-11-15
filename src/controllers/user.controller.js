@@ -142,7 +142,73 @@ const login = async (req, res, next) => {
   }
 };
 
+/**
+ * Get user profile
+ * - Returns authenticated user's profile details
+ * - Requires authentication
+ */
+const getProfile = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        walletPoints: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      return sendError(res, 404, 'User not found');
+    }
+
+    return sendSuccess(res, 200, 'Profile retrieved successfully', {
+      user: {
+        ...user,
+        walletPoints: parseFloat(user.walletPoints),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get user wallet points
+ * - Returns wallet balance and transaction history
+ * - Requires authentication
+ */
+const getWalletPoints = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        walletPoints: true,
+      },
+    });
+
+    if (!user) {
+      return sendError(res, 404, 'User not found');
+    }
+
+    return sendSuccess(res, 200, 'Wallet points retrieved successfully', {
+      walletPoints: parseFloat(user.walletPoints),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   register,
   login,
+  getProfile,
+  getWalletPoints,
 };

@@ -7,6 +7,9 @@ const morgan = require('morgan');
 const userRoutes = require('./routes/user.routes');
 const sellerRoutes = require('./routes/seller.routes');
 const productRoutes = require('./routes/product.routes');
+const cartRoutes = require('./routes/cart.routes');
+const orderRoutes = require('./routes/order.routes');
+const couponRoutes = require('./routes/coupon.routes');
 
 // Import middleware
 const errorMiddleware = require('./middleware/error.middleware');
@@ -36,6 +39,9 @@ app.get('/', (req, res) => {
 app.use('/api/users', userRoutes);
 app.use('/api/sellers', sellerRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/coupons', couponRoutes);
 
 // 404 Handler
 app.use((req, res) => {
