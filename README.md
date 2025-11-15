@@ -1,311 +1,620 @@
-# E-Commerce API - Node.js Practical Assignment
+# E-Commerce API
 
-## Project Overview
-A comprehensive Node.js REST API for an e-commerce system with separate user and seller functionalities, built with Express.js and PostgreSQL (Supabase).
-
-## Tech Stack
-- **Runtime**: Node.js
-- **Framework**: Express.js
-- **Database**: PostgreSQL (Supabase)
-- **Validation**: Joi (all fields validated)
-- **Authentication**: JWT
-- **Password Hashing**: bcrypt
-
-## Features
-
-### Users Side
-1. **Authentication**
-   - User registration (auto-assigns wallet points and welcome coupon)
-   - User login with JWT tokens
-   - Joi validation on all input fields
-
-2. **Shopping Cart**
-   - Add items to cart
-   - Update cart quantities
-   - Remove items from cart
-   - View cart
-
-3. **Order Processing**
-   - Calculate total with discount coupons
-   - Apply wallet points to reduce total
-   - Place orders (automatic stock deduction)
-   - Save order details to database
-
-4. **Payment Handling**
-   - Process payment status (success/failure)
-   - Update order status based on payment
-   - Handle stock rollback on payment failure
-
-### Seller Side
-1. **Authentication**
-   - Seller registration
-   - Seller login with JWT tokens
-   - Joi validation on all input fields
-
-2. **Product Management**
-   - Add new products
-   - Update product details
-   - Manage product stock
-   - Update stock quantities
-   - View all seller products
+A complete Node.js e-commerce API built with Express.js, Prisma ORM, and PostgreSQL (Supabase). This API supports user and seller authentication, product management, cart operations, order processing with coupons and wallet points, and payment status handling.
 
 ## Database Schema
 
-### Tables
-1. **users**
-   - id, email, password, name, wallet_points, created_at, updated_at
+```mermaid
+erDiagram
+    User ||--o{ Cart : "has"
+    User ||--o{ Order : "places"
+    User ||--o{ UserCoupon : "tracks"
 
-2. **sellers**
-   - id, email, password, name, shop_name, created_at, updated_at
+    Seller ||--o{ Product : "owns"
 
-3. **products**
-   - id, seller_id, name, description, price, stock, created_at, updated_at
+    Product ||--o{ Cart : "in"
+    Product ||--o{ OrderItem : "contains"
 
-4. **coupons**
-   - id, code, discount_type (percentage/fixed), discount_value, min_purchase, max_discount, valid_from, valid_to, is_active
+    Coupon ||--o{ UserCoupon : "tracks"
+    Coupon ||--o{ Order : "applies to"
 
-5. **user_coupons**
-   - id, user_id, coupon_id, is_used, used_at
+    Order ||--o{ OrderItem : "contains"
+    Order ||--|| Transaction : "has"
 
-6. **cart**
-   - id, user_id, product_id, quantity, created_at, updated_at
+    User {
+        uuid id PK
+        string email UK
+        string password
+        string name
+        decimal walletPoints
+        datetime createdAt
+        datetime updatedAt
+    }
 
-7. **orders**
-   - id, user_id, total_amount, coupon_discount, wallet_points_used, final_amount, payment_status, order_status, created_at, updated_at
+    Seller {
+        uuid id PK
+        string email UK
+        string password
+        string name
+        string shopName
+        datetime createdAt
+        datetime updatedAt
+    }
 
-8. **order_items**
-   - id, order_id, product_id, quantity, price, created_at
+    Product {
+        uuid id PK
+        uuid sellerId FK
+        string name
+        string description
+        decimal price
+        int stock
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+    }
 
-9. **transactions**
-   - id, order_id, payment_status, payment_method, transaction_id, created_at
+    Coupon {
+        uuid id PK
+        string code UK
+        enum discountType "PERCENTAGE|FIXED"
+        decimal discountValue
+        decimal minPurchase
+        decimal maxDiscount
+        int usageLimitPerUser
+        int totalUsageLimit
+        int currentUsageCount
+        datetime validFrom
+        datetime validTo
+        boolean isActive
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    UserCoupon {
+        uuid id PK
+        uuid userId FK
+        uuid couponId FK
+        int usageCount
+        datetime lastUsedAt
+        datetime createdAt
+    }
+
+    Cart {
+        uuid id PK
+        uuid userId FK
+        uuid productId FK
+        int quantity
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    Order {
+        uuid id PK
+        uuid userId FK
+        uuid couponId FK
+        decimal totalAmount
+        decimal couponDiscount
+        decimal walletPointsUsed
+        decimal finalAmount
+        enum paymentStatus "PENDING|SUCCESS|FAILED|REFUNDED"
+        enum orderStatus "PENDING|CONFIRMED|PROCESSING|SHIPPED|DELIVERED|CANCELLED"
+        datetime createdAt
+        datetime updatedAt
+    }
+
+    OrderItem {
+        uuid id PK
+        uuid orderId FK
+        uuid productId FK
+        int quantity
+        decimal price
+        datetime createdAt
+    }
+
+    Transaction {
+        uuid id PK
+        uuid orderId FK,UK
+        enum paymentStatus "PENDING|SUCCESS|FAILED|REFUNDED"
+        string paymentMethod
+        string transactionId UK
+        datetime createdAt
+        datetime updatedAt
+    }
+```
+
+## Features
+
+### User Side
+- User registration and login with JWT authentication
+- User profile and wallet points management
+- Browse products with search and pagination
+- Shopping cart management
+- Order placement with coupon and wallet point discounts
+- Order history and tracking
+- Payment status updates
+
+### Seller Side
+- Seller registration and login with JWT authentication
+- Product CRUD operations
+- Stock management
+- Product name normalization (stored lowercase, displayed Title Case)
+- Multiple sellers can have products with the same name
+
+### Coupon System
+- Public coupon listing
+- User-specific available coupons
+- Global and per-user usage limits
+- Automatic usage tracking
+- Coupon validation (date range, usage limits, minimum purchase)
+
+### Order & Payment Flow
+- Calculate order preview with discounts
+- Place order (creates PENDING order with stock deduction)
+- Payment gateway integration ready (Razorpay/Stripe)
+- Automatic rollback on payment failure (restores stock, wallet, coupon usage)
+
+## Tech Stack
+
+- **Runtime**: Node.js
+- **Framework**: Express.js
+- **Database**: PostgreSQL (Supabase)
+- **ORM**: Prisma
+- **Authentication**: JWT (jsonwebtoken)
+- **Validation**: Joi
+- **Password Hashing**: bcrypt
+- **Logging**: Morgan
+- **Connection Pooling**: pgBouncer
 
 ## API Endpoints
 
-### User Authentication
-- `POST /api/users/register` - Register new user
-- `POST /api/users/login` - User login
+### User Endpoints
 
-### User Cart
-- `GET /api/cart` - Get user cart
-- `POST /api/cart` - Add item to cart
-- `PUT /api/cart/:id` - Update cart item quantity
-- `DELETE /api/cart/:id` - Remove item from cart
+#### Authentication
+```
+POST   /api/users/register          - Register new user
+POST   /api/users/login             - User login
+GET    /api/users/profile           - Get user profile (authenticated)
+GET    /api/users/wallet            - Get wallet points (authenticated)
+```
 
-### User Orders
-- `POST /api/orders/calculate` - Calculate order total with discounts
-- `POST /api/orders` - Place an order
-- `GET /api/orders` - Get user orders
-- `GET /api/orders/:id` - Get order details
+#### Products (Public)
+```
+GET    /api/products/all            - Get all products with search & pagination
+GET    /api/products/public/:id     - Get single product details
+```
 
-### User Payments
-- `POST /api/payments/process` - Process payment
-- `POST /api/payments/webhook` - Handle payment webhook
+#### Cart
+```
+POST   /api/cart                    - Add item to cart
+GET    /api/cart                    - Get user's cart
+PATCH  /api/cart/:cartItemId        - Update cart item quantity
+DELETE /api/cart/:cartItemId        - Remove item from cart
+DELETE /api/cart                    - Clear entire cart
+```
 
-### Seller Authentication
-- `POST /api/sellers/register` - Register new seller
-- `POST /api/sellers/login` - Seller login
+#### Coupons
+```
+GET    /api/coupons/all             - Get all active coupons (public)
+GET    /api/coupons/:code           - Get coupon details by code (public)
+GET    /api/coupons/user/available  - Get user's available coupons (authenticated)
+```
 
-### Seller Products
-- `POST /api/sellers/products` - Add new product
-- `GET /api/sellers/products` - Get all seller products
-- `PUT /api/sellers/products/:id` - Update product
-- `PATCH /api/sellers/products/:id/stock` - Update product stock
-- `DELETE /api/sellers/products/:id` - Delete product
+#### Orders
+```
+POST   /api/orders/calculate        - Calculate order preview with discounts
+POST   /api/orders                  - Place order
+GET    /api/orders                  - Get user's orders (filter by ?status=PENDING)
+GET    /api/orders/:orderId         - Get single order details
+PATCH  /api/orders/:orderId/payment - Update payment status (SUCCESS/FAILED)
+```
 
-### Products (Public)
-- `GET /api/products` - Get all products
-- `GET /api/products/:id` - Get product details
+### Seller Endpoints
 
-## Installation & Setup
+#### Authentication
+```
+POST   /api/sellers/register        - Register new seller
+POST   /api/sellers/login           - Seller login
+```
 
-### Prerequisites
-- Node.js (v16 or higher)
-- Supabase account
-- npm or yarn
+#### Products (Seller)
+```
+POST   /api/products                - Add new product
+GET    /api/products                - Get seller's products
+GET    /api/products/:productId     - Get single product details
+PUT    /api/products/:productId     - Update product
+PATCH  /api/products/:productId/stock - Update product stock
+DELETE /api/products/:productId     - Delete product (soft delete)
+```
 
-### Steps
+## Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd letmegrab-assignment
-   ```
+1. Clone the repository
+```bash
+git clone <repository-url>
+cd letmegrab-assignment
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+2. Install dependencies
+```bash
+npm install
+```
 
-3. **Environment Configuration**
-   Create a `.env` file in the root directory:
-   ```env
-   PORT=3000
-   NODE_ENV=development
+3. Set up environment variables
+Create a `.env` file in the root directory:
+```env
+DATABASE_URL="your_supabase_database_url?pgbouncer=true"
+DIRECT_URL="your_supabase_direct_url"
+JWT_SECRET="your_jwt_secret_key"
+PORT=3000
+NODE_ENV=development
+```
 
-   # Supabase Database
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_KEY=your_supabase_anon_key
-   DATABASE_URL=your_supabase_postgres_connection_string
+4. Generate Prisma client
+```bash
+npx prisma generate --schema=./src/prisma/schema.prisma
+```
 
-   # JWT
-   JWT_SECRET=your_jwt_secret_key
-   JWT_EXPIRES_IN=7d
+5. Run database migrations
+```bash
+npx prisma migrate deploy --schema=./src/prisma/schema.prisma
+```
 
-   # Welcome Bonus
-   WELCOME_WALLET_POINTS=100
-   WELCOME_COUPON_CODE=WELCOME10
-   ```
+6. Start the server
+```bash
+npm run dev
+```
 
-4. **Database Setup**
-   ```bash
-   npm run setup-db
-   ```
+## Request & Response Examples
 
-5. **Run the application**
-   ```bash
-   # Development
-   npm run dev
+### 1. User Registration
+```bash
+POST /api/users/register
+Content-Type: application/json
 
-   # Production
-   npm start
-   ```
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "name": "John Doe"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "User registered successfully",
+  "data": {
+    "user": {
+      "id": "uuid",
+      "email": "user@example.com",
+      "name": "John Doe",
+      "walletPoints": 0
+    },
+    "token": "jwt_token_here"
+  }
+}
+```
+
+### 2. Add Product (Seller)
+```bash
+POST /api/products
+Authorization: Bearer <seller_token>
+Content-Type: application/json
+
+{
+  "name": "iPhone 15 Pro",
+  "description": "Latest Apple smartphone",
+  "price": 999.99,
+  "stock": 50
+}
+```
+
+### 3. Calculate Order
+```bash
+POST /api/orders/calculate
+Authorization: Bearer <user_token>
+Content-Type: application/json
+
+{
+  "couponCode": "SUMMER20",
+  "useWalletPoints": true,
+  "walletPointsToUse": 50
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Order calculation successful",
+  "data": {
+    "breakdown": {
+      "subtotal": 1000,
+      "couponDiscount": 200,
+      "walletPointsUsed": 50,
+      "finalAmount": 750,
+      "items": [...]
+    }
+  }
+}
+```
+
+### 4. Place Order
+```bash
+POST /api/orders
+Authorization: Bearer <user_token>
+Content-Type: application/json
+
+{
+  "couponCode": "SUMMER20",
+  "useWalletPoints": true,
+  "walletPointsToUse": 50
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Order placed successfully",
+  "data": {
+    "order": {
+      "orderId": "uuid",
+      "finalAmount": 750,
+      "paymentStatus": "PENDING",
+      "orderStatus": "PENDING"
+    }
+  }
+}
+```
+
+### 5. Update Payment Status
+```bash
+PATCH /api/orders/:orderId/payment
+Authorization: Bearer <user_token>
+Content-Type: application/json
+
+{
+  "paymentStatus": "SUCCESS"
+}
+```
+
+## Payment Flow Integration
+
+### Complete Order Flow
+
+```
+1. User adds items to cart
+   → POST /api/cart
+
+2. User views cart
+   → GET /api/cart
+
+3. User applies coupon and sees preview
+   → POST /api/orders/calculate
+
+4. User places order (status: PENDING, stock deducted)
+   → POST /api/orders
+
+5. Frontend opens payment gateway (Razorpay/Stripe)
+
+6. User completes payment:
+   - SUCCESS → PATCH /api/orders/:id/payment {status: "SUCCESS"}
+     Order status: CONFIRMED
+
+   - FAILED → PATCH /api/orders/:id/payment {status: "FAILED"}
+     Order status: CANCELLED
+     Stock restored ✓
+     Wallet points restored ✓
+     Coupon usage restored ✓
+```
+
+### Frontend Integration Example (React + Razorpay)
+
+```javascript
+const handleCheckout = async () => {
+  // 1. Place order
+  const orderRes = await axios.post('/api/orders', {
+    couponCode: "SUMMER20",
+    useWalletPoints: true,
+    walletPointsToUse: 50
+  });
+
+  const { orderId, finalAmount } = orderRes.data.data.order;
+
+  // 2. Initiate Razorpay
+  const options = {
+    key: "rzp_test_YOUR_KEY",
+    amount: finalAmount * 100, // paise
+    currency: "INR",
+    name: "My Store",
+
+    handler: async function(response) {
+      // Payment success
+      await axios.patch(`/api/orders/${orderId}/payment`, {
+        paymentStatus: "SUCCESS"
+      });
+      alert("Order confirmed!");
+    },
+
+    modal: {
+      ondismiss: async function() {
+        // Payment failed/cancelled
+        await axios.patch(`/api/orders/${orderId}/payment`, {
+          paymentStatus: "FAILED"
+        });
+        alert("Payment failed. Stock restored.");
+      }
+    }
+  };
+
+  const razorpay = new window.Razorpay(options);
+  razorpay.open();
+};
+```
+
+## Key Features Explained
+
+### 1. Product Name Normalization
+- **Storage**: Products are stored in lowercase and trimmed (`"iphone 15 pro"`)
+- **Display**: Products are displayed in Title Case (`"Iphone 15 Pro"`)
+- **Duplicate Check**: Different sellers CAN have products with the same name
+
+### 2. Coupon System
+- **Discount Types**: PERCENTAGE or FIXED
+- **Usage Limits**:
+  - Global limit (total uses across all users)
+  - Per-user limit (max uses per individual user)
+- **Validation**: Minimum purchase amount, maximum discount cap
+- **Date Range**: Valid from/to dates
+
+### 3. Wallet Points
+- 1 wallet point = ₹1
+- Applied AFTER coupon discount
+- Cannot exceed remaining order amount
+- Automatically restored on payment failure
+
+### 4. Transaction Safety
+- All order operations use database transactions
+- Stock deduction happens atomically
+- Payment failure automatically rolls back all changes
+
+### 5. Soft Deletes
+- Products use `isActive` flag instead of hard deletion
+- Ensures order history remains intact
+- Inactive products don't appear in public listings
+
+## Database Relationships
+
+### User Relationships
+- User → Cart (1:N)
+- User → Order (1:N)
+- User → UserCoupon (1:N) - Tracks usage
+
+### Seller Relationships
+- Seller → Product (1:N)
+
+### Product Relationships
+- Product → Cart (1:N)
+- Product → OrderItem (1:N)
+
+### Order Relationships
+- Order → OrderItem (1:N)
+- Order → Transaction (1:1)
+- User ← Order (N:1)
+- Coupon ← Order (N:1, optional)
+
+## Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string (with pgBouncer) | `postgresql://user:pass@host/db?pgbouncer=true` |
+| `DIRECT_URL` | Direct PostgreSQL connection (for migrations) | `postgresql://user:pass@host/db` |
+| `JWT_SECRET` | Secret key for JWT token generation | `your-super-secret-key` |
+| `PORT` | Server port | `3000` |
+| `NODE_ENV` | Environment (development/production) | `development` |
+
+## Error Handling
+
+All errors follow a consistent format:
+
+```json
+{
+  "success": false,
+  "message": "Error message here",
+  "error": "Detailed error (development only)"
+}
+```
+
+Common HTTP status codes:
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request (validation errors)
+- `401` - Unauthorized (missing/invalid token)
+- `403` - Forbidden (wrong user type)
+- `404` - Not Found
+- `409` - Conflict (duplicate entry)
+- `500` - Internal Server Error
+
+## Security Features
+
+- **Password Hashing**: bcrypt with 10 rounds
+- **JWT Authentication**: Separate tokens for users and sellers
+- **Type-based Access Control**: Users can't access seller routes and vice versa
+- **Input Validation**: Joi schemas for all inputs
+- **SQL Injection Prevention**: Prisma ORM with parameterized queries
+- **Stock Validation**: Prevents overselling
+- **Coupon Validation**: Prevents misuse of expired/invalid coupons
+
+## Scripts
+
+```bash
+npm run dev          # Start development server with nodemon
+npm start            # Start production server
+npm run migrate      # Run database migrations
+npm run generate     # Generate Prisma client
+```
 
 ## Project Structure
+
 ```
 letmegrab-assignment/
 ├── src/
 │   ├── config/
-│   │   ├── database.js
-│   │   └── env.js
+│   │   └── database.js         # Prisma client configuration
 │   ├── controllers/
 │   │   ├── user.controller.js
 │   │   ├── seller.controller.js
+│   │   ├── product.controller.js
 │   │   ├── cart.controller.js
 │   │   ├── order.controller.js
-│   │   ├── payment.controller.js
-│   │   └── product.controller.js
+│   │   └── coupon.controller.js
 │   ├── middleware/
 │   │   ├── auth.middleware.js
 │   │   ├── validation.middleware.js
 │   │   └── error.middleware.js
-│   ├── models/
-│   │   ├── user.model.js
-│   │   ├── seller.model.js
-│   │   ├── product.model.js
-│   │   ├── cart.model.js
-│   │   ├── order.model.js
-│   │   └── coupon.model.js
 │   ├── routes/
 │   │   ├── user.routes.js
 │   │   ├── seller.routes.js
+│   │   ├── product.routes.js
 │   │   ├── cart.routes.js
 │   │   ├── order.routes.js
-│   │   ├── payment.routes.js
-│   │   └── product.routes.js
-│   ├── services/
-│   │   ├── user.service.js
-│   │   ├── seller.service.js
-│   │   ├── cart.service.js
-│   │   ├── order.service.js
-│   │   ├── payment.service.js
-│   │   └── product.service.js
-│   ├── utils/
-│   │   ├── jwt.util.js
-│   │   ├── response.util.js
-│   │   └── error.util.js
+│   │   └── coupon.routes.js
 │   ├── validations/
 │   │   ├── user.validation.js
 │   │   ├── seller.validation.js
+│   │   ├── product.validation.js
 │   │   ├── cart.validation.js
-│   │   ├── order.validation.js
-│   │   └── product.validation.js
-│   ├── app.js
-│   └── server.js
-├── scripts/
-│   └── setup-database.js
-├── .env.example
+│   │   └── order.validation.js
+│   ├── utils/
+│   │   ├── response.util.js
+│   │   ├── jwt.util.js
+│   │   └── string.util.js
+│   ├── prisma/
+│   │   └── schema.prisma
+│   └── index.js                # Application entry point
+├── .env
 ├── .gitignore
 ├── package.json
 └── README.md
 ```
 
-## Validation Rules (Joi)
-
-All API endpoints include comprehensive Joi validation for:
-- Email format validation
-- Password strength requirements (min 8 chars, alphanumeric)
-- Required fields
-- Data type validation
-- Min/max value constraints
-- Custom business logic validation
-
-## Business Logic
-
-### New User Registration Flow
-1. Validate user input with Joi
-2. Hash password with bcrypt
-3. Create user account
-4. Assign welcome wallet points (100 points)
-5. Assign welcome coupon (WELCOME10)
-6. Return JWT token
-
-### Order Placement Flow
-1. Validate cart items
-2. Calculate subtotal
-3. Apply coupon discount (if valid)
-4. Apply wallet points
-5. Calculate final amount
-6. Check product stock availability
-7. Create order
-8. Deduct stock from products
-9. Process payment
-10. Update order status based on payment result
-11. Rollback stock if payment fails
-
-### Stock Management
-- Automatic stock deduction on successful order
-- Stock rollback on payment failure
-- Seller can update stock quantities
-- Prevent orders when stock is insufficient
-
-## Error Handling
-- Centralized error handling middleware
-- Custom error classes
-- Proper HTTP status codes
-- Detailed error messages in development
-- Generic messages in production
-
-## Security Features
-- JWT authentication
-- Password hashing with bcrypt
-- Input validation with Joi
-- SQL injection prevention (parameterized queries)
-- CORS configuration
-- Rate limiting (recommended)
-- Helmet.js for security headers (recommended)
-
-## Testing
-```bash
-# Run tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
-```
-
-## API Documentation
-Once the server is running, API documentation will be available at:
-- Postman Collection: `/docs/postman-collection.json`
-- Swagger UI: `http://localhost:3000/api-docs` (if implemented)
-
-## Environment Variables
-See `.env.example` for all required environment variables.
-
 ## Contributing
-This is a practical assignment project.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
-Private - For assignment purposes only
 
-## Contact
-For questions regarding this assignment, please contact the project maintainer.
+This project is licensed under the MIT License.
+
+## Support
+
+For issues and questions, please open an issue on GitHub.
+
+---
+
+Built with ❤️ using Node.js, Express, Prisma, and PostgreSQL
