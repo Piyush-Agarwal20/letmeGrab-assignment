@@ -4,123 +4,224 @@ A complete Node.js e-commerce API built with Express.js, Prisma ORM, and Postgre
 
 ## Database Schema
 
-```mermaid
-erDiagram
-    User ||--o{ Cart : "has"
-    User ||--o{ Order : "places"
-    User ||--o{ UserCoupon : "tracks"
+### Entity Relationship Overview
 
-    Seller ||--o{ Product : "owns"
-
-    Product ||--o{ Cart : "in"
-    Product ||--o{ OrderItem : "contains"
-
-    Coupon ||--o{ UserCoupon : "tracks"
-    Coupon ||--o{ Order : "applies to"
-
-    Order ||--o{ OrderItem : "contains"
-    Order ||--|| Transaction : "has"
-
-    User {
-        uuid id PK
-        string email UK
-        string password
-        string name
-        decimal walletPoints
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    Seller {
-        uuid id PK
-        string email UK
-        string password
-        string name
-        string shopName
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    Product {
-        uuid id PK
-        uuid sellerId FK
-        string name
-        string description
-        decimal price
-        int stock
-        boolean isActive
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    Coupon {
-        uuid id PK
-        string code UK
-        enum discountType "PERCENTAGE|FIXED"
-        decimal discountValue
-        decimal minPurchase
-        decimal maxDiscount
-        int usageLimitPerUser
-        int totalUsageLimit
-        int currentUsageCount
-        datetime validFrom
-        datetime validTo
-        boolean isActive
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    UserCoupon {
-        uuid id PK
-        uuid userId FK
-        uuid couponId FK
-        int usageCount
-        datetime lastUsedAt
-        datetime createdAt
-    }
-
-    Cart {
-        uuid id PK
-        uuid userId FK
-        uuid productId FK
-        int quantity
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    Order {
-        uuid id PK
-        uuid userId FK
-        uuid couponId FK
-        decimal totalAmount
-        decimal couponDiscount
-        decimal walletPointsUsed
-        decimal finalAmount
-        enum paymentStatus "PENDING|SUCCESS|FAILED|REFUNDED"
-        enum orderStatus "PENDING|CONFIRMED|PROCESSING|SHIPPED|DELIVERED|CANCELLED"
-        datetime createdAt
-        datetime updatedAt
-    }
-
-    OrderItem {
-        uuid id PK
-        uuid orderId FK
-        uuid productId FK
-        int quantity
-        decimal price
-        datetime createdAt
-    }
-
-    Transaction {
-        uuid id PK
-        uuid orderId FK,UK
-        enum paymentStatus "PENDING|SUCCESS|FAILED|REFUNDED"
-        string paymentMethod
-        string transactionId UK
-        datetime createdAt
-        datetime updatedAt
-    }
 ```
+┌──────────┐         ┌──────────┐
+│   User   │────────▶│   Cart   │
+│          │  1:N    │          │
+└────┬─────┘         └────┬─────┘
+     │                    │
+     │ 1:N                │ N:1
+     │                    │
+     ▼                    ▼
+┌──────────┐         ┌──────────┐
+│  Order   │────────▶│ Product  │
+│          │         │          │
+└────┬─────┘         └────┬─────┘
+     │                    │
+     │ 1:1                │ N:1
+     │                    │
+     ▼                    ▼
+┌──────────┐         ┌──────────┐
+│Transaction│        │  Seller  │
+│          │         │          │
+└──────────┘         └──────────┘
+
+┌──────────┐         ┌──────────┐
+│  Coupon  │────────▶│UserCoupon│
+│          │  1:N    │          │
+└────┬─────┘         └──────────┘
+     │
+     │ 1:N
+     │
+     ▼
+┌──────────┐
+│  Order   │
+│          │
+└──────────┘
+```
+
+### Database Tables
+
+#### 1. User
+```
+- id (uuid, PK)
+- email (string, unique)
+- password (string, hashed)
+- name (string)
+- walletPoints (decimal)
+- createdAt (datetime)
+- updatedAt (datetime)
+
+Relations:
+  → Cart (1:N)
+  → Order (1:N)
+  → UserCoupon (1:N)
+```
+
+#### 2. Seller
+```
+- id (uuid, PK)
+- email (string, unique)
+- password (string, hashed)
+- name (string)
+- shopName (string)
+- createdAt (datetime)
+- updatedAt (datetime)
+
+Relations:
+  → Product (1:N)
+```
+
+#### 3. Product
+```
+- id (uuid, PK)
+- sellerId (uuid, FK → Seller)
+- name (string, normalized)
+- description (string, optional)
+- price (decimal)
+- stock (int)
+- isActive (boolean)
+- createdAt (datetime)
+- updatedAt (datetime)
+
+Relations:
+  ← Seller (N:1)
+  → Cart (1:N)
+  → OrderItem (1:N)
+```
+
+#### 4. Cart
+```
+- id (uuid, PK)
+- userId (uuid, FK → User)
+- productId (uuid, FK → Product)
+- quantity (int)
+- createdAt (datetime)
+- updatedAt (datetime)
+
+Unique: (userId, productId)
+
+Relations:
+  ← User (N:1)
+  ← Product (N:1)
+```
+
+#### 5. Coupon
+```
+- id (uuid, PK)
+- code (string, unique)
+- discountType (enum: PERCENTAGE|FIXED)
+- discountValue (decimal)
+- minPurchase (decimal, optional)
+- maxDiscount (decimal, optional)
+- usageLimitPerUser (int, optional)
+- totalUsageLimit (int, optional)
+- currentUsageCount (int)
+- validFrom (datetime)
+- validTo (datetime)
+- isActive (boolean)
+- createdAt (datetime)
+- updatedAt (datetime)
+
+Relations:
+  → UserCoupon (1:N)
+  → Order (1:N)
+```
+
+#### 6. UserCoupon
+```
+- id (uuid, PK)
+- userId (uuid, FK → User)
+- couponId (uuid, FK → Coupon)
+- usageCount (int)
+- lastUsedAt (datetime, optional)
+- createdAt (datetime)
+
+Unique: (userId, couponId)
+
+Relations:
+  ← User (N:1)
+  ← Coupon (N:1)
+```
+
+#### 7. Order
+```
+- id (uuid, PK)
+- userId (uuid, FK → User)
+- couponId (uuid, FK → Coupon, optional)
+- totalAmount (decimal)
+- couponDiscount (decimal)
+- walletPointsUsed (decimal)
+- finalAmount (decimal)
+- paymentStatus (enum: PENDING|SUCCESS|FAILED|REFUNDED)
+- orderStatus (enum: PENDING|CONFIRMED|PROCESSING|SHIPPED|DELIVERED|CANCELLED)
+- createdAt (datetime)
+- updatedAt (datetime)
+
+Relations:
+  ← User (N:1)
+  ← Coupon (N:1, optional)
+  → OrderItem (1:N)
+  → Transaction (1:1)
+```
+
+#### 8. OrderItem
+```
+- id (uuid, PK)
+- orderId (uuid, FK → Order)
+- productId (uuid, FK → Product)
+- quantity (int)
+- price (decimal, snapshot)
+- createdAt (datetime)
+
+Relations:
+  ← Order (N:1)
+  ← Product (N:1)
+```
+
+#### 9. Transaction
+```
+- id (uuid, PK)
+- orderId (uuid, FK → Order, unique)
+- paymentStatus (enum: PENDING|SUCCESS|FAILED|REFUNDED)
+- paymentMethod (string, optional)
+- transactionId (string, unique, optional)
+- createdAt (datetime)
+- updatedAt (datetime)
+
+Relations:
+  ← Order (1:1)
+```
+
+### Relationship Summary
+
+**One-to-Many (1:N)**
+- User → Cart
+- User → Order
+- User → UserCoupon
+- Seller → Product
+- Product → Cart
+- Product → OrderItem
+- Coupon → UserCoupon
+- Coupon → Order
+- Order → OrderItem
+
+**One-to-One (1:1)**
+- Order → Transaction
+
+**Many-to-One (N:1)**
+- Cart → User
+- Cart → Product
+- Order → User
+- Order → Coupon (optional)
+- OrderItem → Order
+- OrderItem → Product
+- UserCoupon → User
+- UserCoupon → Coupon
+- Product → Seller
+- Transaction → Order
 
 ## Features
 
