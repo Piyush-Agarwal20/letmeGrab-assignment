@@ -1,78 +1,36 @@
 # Frontend Integration Guide
 
-Complete guide for integrating the E-Commerce API with your frontend application (React/Next.js/Vue).
+Complete conceptual guide for integrating the E-Commerce API with your frontend application.
 
 ## Table of Contents
-1. [Setup & Configuration](#setup--configuration)
+1. [Overview](#overview)
 2. [Authentication Flow](#authentication-flow)
-3. [User Features](#user-features)
-4. [Seller Features](#seller-features)
-5. [Shopping Flow](#shopping-flow)
-6. [Payment Integration](#payment-integration)
-7. [Error Handling](#error-handling)
+3. [User Journey](#user-journey)
+4. [Seller Journey](#seller-journey)
+5. [Payment Integration](#payment-integration)
+6. [API Integration Patterns](#api-integration-patterns)
+7. [Error Handling Strategy](#error-handling-strategy)
 
 ---
 
-## Setup & Configuration
+## Overview
 
-### 1. Install Dependencies
-
-```bash
-npm install axios
-# For Razorpay payment integration
-npm install react-razorpay
+### Base URL
+```
+Development: http://localhost:3000/api
+Production: https://your-domain.com/api
 ```
 
-### 2. Create API Client
-
-**`src/utils/api.js`**
-```javascript
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000/api';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Request interceptor - Add auth token to all requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Response interceptor - Handle errors globally
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-
-export default api;
+### Authentication
+All authenticated endpoints require a JWT token in the Authorization header:
+```
+Authorization: Bearer <your_jwt_token>
 ```
 
-### 3. Environment Variables
-
-**`.env`**
-```env
-REACT_APP_API_URL=http://localhost:3000/api
-REACT_APP_RAZORPAY_KEY=rzp_test_YOUR_KEY
-```
+Store the token in:
+- **localStorage** - Simple, accessible across tabs
+- **sessionStorage** - More secure, cleared on tab close
+- **httpOnly cookie** - Most secure (requires backend changes)
 
 ---
 
@@ -80,1115 +38,841 @@ REACT_APP_RAZORPAY_KEY=rzp_test_YOUR_KEY
 
 ### 1. User Registration
 
-**Component: `Register.jsx`**
-```javascript
-import { useState } from 'react';
-import api from '../utils/api';
+**Endpoint:** `POST /api/users/register`
 
-function Register() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: ''
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+**What to send:**
+- User's name
+- Email address
+- Password
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+**What you'll receive:**
+- User profile (id, email, name, walletPoints)
+- JWT token
+- Welcome bonus info (100 wallet points + WELCOME10 coupon)
 
-    try {
-      const response = await api.post('/users/register', formData);
+**Frontend actions:**
+1. Show registration form
+2. Send data to API
+3. Save token to localStorage
+4. Show welcome message with bonus info
+5. Redirect to dashboard/home
 
-      // Save token and user data
-      localStorage.setItem('token', response.data.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.data.user));
-
-      // Show welcome bonus
-      alert(`Welcome! You received ${response.data.data.welcomeBonus.walletPoints} wallet points and coupon: ${response.data.data.welcomeBonus.couponCode}`);
-
-      // Redirect to dashboard
-      window.location.href = '/dashboard';
-    } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleRegister}>
-      <input
-        type="text"
-        placeholder="Name"
-        value={formData.name}
-        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-        required
-      />
-      <input
-        type="email"
-        placeholder="Email"
-        value={formData.email}
-        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-        required
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={formData.password}
-        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-        required
-      />
-      {error && <p className="error">{error}</p>}
-      <button type="submit" disabled={loading}>
-        {loading ? 'Registering...' : 'Register'}
-      </button>
-    </form>
-  );
-}
-
-export default Register;
-```
+---
 
 ### 2. User Login
 
-**Component: `Login.jsx`**
-```javascript
-import { useState } from 'react';
-import api from '../utils/api';
+**Endpoint:** `POST /api/users/login`
 
-function Login() {
-  const [credentials, setCredentials] = useState({
-    email: '',
-    password: ''
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+**What to send:**
+- Email address
+- Password
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+**What you'll receive:**
+- User profile
+- JWT token
 
-    try {
-      const response = await api.post('/users/login', credentials);
-
-      // Save token and user data
-      localStorage.setItem('token', response.data.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.data.user));
-
-      // Redirect to dashboard
-      window.location.href = '/dashboard';
-    } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleLogin}>
-      <input
-        type="email"
-        placeholder="Email"
-        value={credentials.email}
-        onChange={(e) => setCredentials({ ...credentials, email: e.target.value })}
-        required
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={credentials.password}
-        onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-        required
-      />
-      {error && <p className="error">{error}</p>}
-      <button type="submit" disabled={loading}>
-        {loading ? 'Logging in...' : 'Login'}
-      </button>
-    </form>
-  );
-}
-
-export default Login;
-```
-
-### 3. Seller Login
-
-**Component: `SellerLogin.jsx`**
-```javascript
-import { useState } from 'react';
-import api from '../utils/api';
-
-function SellerLogin() {
-  const [credentials, setCredentials] = useState({
-    email: '',
-    password: ''
-  });
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-
-    try {
-      const response = await api.post('/sellers/login', credentials);
-
-      // Save seller token
-      localStorage.setItem('token', response.data.data.token);
-      localStorage.setItem('seller', JSON.stringify(response.data.data.seller));
-
-      // Redirect to seller dashboard
-      window.location.href = '/seller/dashboard';
-    } catch (err) {
-      alert(err.response?.data?.message || 'Login failed');
-    }
-  };
-
-  // ... similar form implementation
-}
-```
+**Frontend actions:**
+1. Show login form
+2. Send credentials to API
+3. Save token to localStorage
+4. Redirect to dashboard
 
 ---
 
-## User Features
+### 3. Seller Registration & Login
 
-### 1. Get User Profile
+**Endpoints:**
+- `POST /api/sellers/register`
+- `POST /api/sellers/login`
 
-**Component: `UserProfile.jsx`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
+**What to send:**
+- Name, email, password
+- Shop name (for registration)
 
-function UserProfile() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+**What you'll receive:**
+- Seller profile
+- JWT token
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
-    try {
-      const response = await api.get('/users/profile');
-      setUser(response.data.data.user);
-    } catch (err) {
-      console.error('Failed to fetch profile', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) return <p>Loading...</p>;
-
-  return (
-    <div className="profile">
-      <h2>Profile</h2>
-      <p>Name: {user.name}</p>
-      <p>Email: {user.email}</p>
-      <p>Wallet Points: ₹{user.walletPoints}</p>
-      <p>Member since: {new Date(user.createdAt).toLocaleDateString()}</p>
-    </div>
-  );
-}
-
-export default UserProfile;
-```
-
-### 2. Get Wallet Points
-
-**Hook: `useWallet.js`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
-
-export function useWallet() {
-  const [walletPoints, setWalletPoints] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  const fetchWalletPoints = async () => {
-    try {
-      const response = await api.get('/users/wallet');
-      setWalletPoints(response.data.data.walletPoints);
-    } catch (err) {
-      console.error('Failed to fetch wallet points', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchWalletPoints();
-  }, []);
-
-  return { walletPoints, loading, refresh: fetchWalletPoints };
-}
-```
-
-**Usage in Component:**
-```javascript
-function WalletDisplay() {
-  const { walletPoints, loading, refresh } = useWallet();
-
-  if (loading) return <p>Loading wallet...</p>;
-
-  return (
-    <div className="wallet">
-      <h3>Wallet Balance</h3>
-      <p>₹{walletPoints}</p>
-      <button onClick={refresh}>Refresh</button>
-    </div>
-  );
-}
-```
+**Frontend actions:**
+1. Use separate seller login/register pages
+2. Save token with identifier (e.g., userType: 'seller')
+3. Redirect to seller dashboard
 
 ---
 
-## Seller Features
+## User Journey
 
-### 1. Add Product
+### Step 1: Browse Products
 
-**Component: `AddProduct.jsx`**
-```javascript
-import { useState } from 'react';
-import api from '../utils/api';
+**Endpoint:** `GET /api/products/all?search=iphone&page=1&limit=12`
 
-function AddProduct() {
-  const [product, setProduct] = useState({
-    name: '',
-    description: '',
-    price: '',
-    stock: ''
-  });
+**What you'll receive:**
+- List of products with:
+  - Product ID, name, description
+  - Price, stock availability
+  - Seller information
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+**Frontend pages:**
+- Home page / Product listing page
+- Show products in grid/list
+- Add search bar
+- Add pagination controls
 
-    try {
-      const response = await api.post('/products', {
-        name: product.name,
-        description: product.description,
-        price: parseFloat(product.price),
-        stock: parseInt(product.stock)
-      });
-
-      alert('Product added successfully!');
-      // Reset form
-      setProduct({ name: '', description: '', price: '', stock: '' });
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to add product');
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="text"
-        placeholder="Product Name"
-        value={product.name}
-        onChange={(e) => setProduct({ ...product, name: e.target.value })}
-        required
-      />
-      <textarea
-        placeholder="Description"
-        value={product.description}
-        onChange={(e) => setProduct({ ...product, description: e.target.value })}
-      />
-      <input
-        type="number"
-        placeholder="Price"
-        step="0.01"
-        value={product.price}
-        onChange={(e) => setProduct({ ...product, price: e.target.value })}
-        required
-      />
-      <input
-        type="number"
-        placeholder="Stock"
-        value={product.stock}
-        onChange={(e) => setProduct({ ...product, stock: e.target.value })}
-        required
-      />
-      <button type="submit">Add Product</button>
-    </form>
-  );
-}
-
-export default AddProduct;
-```
-
-### 2. Get Seller Products
-
-**Component: `SellerProducts.jsx`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
-
-function SellerProducts() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
-    try {
-      const response = await api.get('/products');
-      setProducts(response.data.data.products);
-    } catch (err) {
-      console.error('Failed to fetch products', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateStock = async (productId, newStock) => {
-    try {
-      await api.patch(`/products/${productId}/stock`, {
-        stock: parseInt(newStock)
-      });
-      alert('Stock updated!');
-      fetchProducts(); // Refresh list
-    } catch (err) {
-      alert('Failed to update stock');
-    }
-  };
-
-  const deleteProduct = async (productId) => {
-    if (!confirm('Are you sure?')) return;
-
-    try {
-      await api.delete(`/products/${productId}`);
-      alert('Product deleted!');
-      fetchProducts();
-    } catch (err) {
-      alert('Failed to delete product');
-    }
-  };
-
-  if (loading) return <p>Loading...</p>;
-
-  return (
-    <div className="products-list">
-      <h2>My Products</h2>
-      {products.map((product) => (
-        <div key={product.id} className="product-item">
-          <h3>{product.name}</h3>
-          <p>Price: ₹{product.price}</p>
-          <p>Stock: {product.stock}</p>
-          <p>Status: {product.isActive ? 'Active' : 'Inactive'}</p>
-
-          <input
-            type="number"
-            defaultValue={product.stock}
-            onBlur={(e) => updateStock(product.id, e.target.value)}
-          />
-
-          <button onClick={() => deleteProduct(product.id)}>Delete</button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default SellerProducts;
-```
+**No authentication required** - Public endpoint
 
 ---
 
-## Shopping Flow
+### Step 2: View Product Details
 
-### 1. Browse Products (Public)
+**Endpoint:** `GET /api/products/public/:productId`
 
-**Component: `ProductList.jsx`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
+**What you'll receive:**
+- Detailed product information
+- Stock status
+- Seller details
 
-function ProductList() {
-  const [products, setProducts] = useState([]);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
+**Frontend pages:**
+- Product detail page
+- Show all product info
+- "Add to Cart" button
 
-  useEffect(() => {
-    fetchProducts();
-  }, [search, page]);
+**No authentication required** - Public endpoint
 
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get('/products/all', {
-        params: { search, page, limit: 12 }
-      });
-      setProducts(response.data.data.products);
-    } catch (err) {
-      console.error('Failed to fetch products', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+---
 
-  return (
-    <div className="product-list">
-      <input
-        type="text"
-        placeholder="Search products..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+### Step 3: Add to Cart
 
-      {loading ? (
-        <p>Loading...</p>
-      ) : (
-        <div className="products-grid">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
-      )}
+**Endpoint:** `POST /api/cart`
 
-      <div className="pagination">
-        <button onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</button>
-        <span>Page {page}</span>
-        <button onClick={() => setPage(p => p + 1)}>Next</button>
-      </div>
-    </div>
-  );
-}
+**What to send:**
+- Product ID
+- Quantity
 
-function ProductCard({ product }) {
-  const addToCart = async () => {
-    try {
-      await api.post('/cart', {
-        productId: product.id,
-        quantity: 1
-      });
-      alert('Added to cart!');
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to add to cart');
-    }
-  };
+**What you'll receive:**
+- Success confirmation
+- Updated cart item
 
-  return (
-    <div className="product-card">
-      <h3>{product.name}</h3>
-      <p>{product.description}</p>
-      <p className="price">₹{product.price}</p>
-      <p>Stock: {product.stock}</p>
-      <button onClick={addToCart} disabled={product.stock === 0}>
-        {product.stock > 0 ? 'Add to Cart' : 'Out of Stock'}
-      </button>
-    </div>
-  );
-}
+**Frontend actions:**
+1. User clicks "Add to Cart"
+2. Send product ID and quantity
+3. Show success notification
+4. Update cart icon badge count
 
-export default ProductList;
-```
+**Authentication required** - User must be logged in
 
-### 2. Shopping Cart
+---
 
-**Component: `Cart.jsx`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
+### Step 4: View Cart
 
-function Cart() {
-  const [cart, setCart] = useState([]);
-  const [loading, setLoading] = useState(true);
+**Endpoint:** `GET /api/cart`
 
-  useEffect(() => {
-    fetchCart();
-  }, []);
+**What you'll receive:**
+- List of cart items with:
+  - Product details
+  - Quantity
+  - Price per item
+  - Subtotal
 
-  const fetchCart = async () => {
-    try {
-      const response = await api.get('/cart');
-      setCart(response.data.data.cart);
-    } catch (err) {
-      console.error('Failed to fetch cart', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+**Frontend pages:**
+- Cart page
+- Show all items
+- Allow quantity updates
+- Allow item removal
+- Show total amount
+- "Proceed to Checkout" button
 
-  const updateQuantity = async (cartItemId, newQuantity) => {
-    try {
-      await api.patch(`/cart/${cartItemId}`, {
-        quantity: parseInt(newQuantity)
-      });
-      fetchCart(); // Refresh cart
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to update quantity');
-    }
-  };
+---
 
-  const removeItem = async (cartItemId) => {
-    try {
-      await api.delete(`/cart/${cartItemId}`);
-      fetchCart();
-    } catch (err) {
-      alert('Failed to remove item');
-    }
-  };
+### Step 5: Update Cart
 
-  const clearCart = async () => {
-    if (!confirm('Clear entire cart?')) return;
+**Update quantity:** `PATCH /api/cart/:cartItemId`
+**Remove item:** `DELETE /api/cart/:cartItemId`
+**Clear cart:** `DELETE /api/cart`
 
-    try {
-      await api.delete('/cart');
-      setCart([]);
-    } catch (err) {
-      alert('Failed to clear cart');
-    }
-  };
+**Frontend actions:**
+- Update quantity: Dropdown or +/- buttons
+- Remove: "Remove" button per item
+- Clear: "Clear Cart" button
 
-  const total = cart.reduce((sum, item) =>
-    sum + (item.product.price * item.quantity), 0
-  );
+---
 
-  if (loading) return <p>Loading cart...</p>;
+### Step 6: View Available Coupons
 
-  if (cart.length === 0) {
-    return <p>Your cart is empty</p>;
-  }
+**Endpoints:**
+- `GET /api/coupons/all` - Public, all active coupons
+- `GET /api/coupons/user/available` - User-specific available coupons
+- `GET /api/coupons/:code` - Validate specific coupon
 
-  return (
-    <div className="cart">
-      <h2>Shopping Cart</h2>
+**What you'll receive:**
+- Coupon code
+- Discount type (PERCENTAGE or FIXED)
+- Discount value
+- Minimum purchase requirement
+- Maximum discount cap
+- Usage limits
+- Validity dates
+- Remaining uses
 
-      {cart.map((item) => (
-        <div key={item.id} className="cart-item">
-          <h3>{item.product.name}</h3>
-          <p>Price: ₹{item.product.price}</p>
+**Frontend pages:**
+- Coupons page
+- Show all available coupons
+- "Copy Code" button
+- Filter by discount type
+- Show expiry dates
 
-          <select
-            value={item.quantity}
-            onChange={(e) => updateQuantity(item.id, e.target.value)}
-          >
-            {[...Array(Math.min(item.product.stock, 10))].map((_, i) => (
-              <option key={i + 1} value={i + 1}>{i + 1}</option>
-            ))}
-          </select>
+---
 
-          <p>Subtotal: ₹{item.product.price * item.quantity}</p>
+### Step 7: Calculate Order (Preview)
 
-          <button onClick={() => removeItem(item.id)}>Remove</button>
-        </div>
-      ))}
+**Endpoint:** `POST /api/orders/calculate`
 
-      <div className="cart-summary">
-        <h3>Total: ₹{total.toFixed(2)}</h3>
-        <button onClick={clearCart}>Clear Cart</button>
-        <button onClick={() => window.location.href = '/checkout'}>
-          Proceed to Checkout
-        </button>
-      </div>
-    </div>
-  );
-}
+**What to send:**
+- Coupon code (optional)
+- Whether to use wallet points
+- Amount of wallet points to use
 
-export default Cart;
-```
+**What you'll receive:**
+- Subtotal
+- Coupon discount applied
+- Wallet points deducted
+- Final amount to pay
+- List of items
 
-### 3. Available Coupons
+**Frontend pages:**
+- Checkout page
+- Show order breakdown
+- Coupon input field
+- Wallet points checkbox
+- Preview before final order
 
-**Component: `Coupons.jsx`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
+**Purpose:**
+- Let user see final price BEFORE placing order
+- Validate coupon
+- Check wallet points balance
+- No stock deduction yet
 
-function Coupons() {
-  const [coupons, setCoupons] = useState([]);
+---
 
-  useEffect(() => {
-    fetchCoupons();
-  }, []);
+### Step 8: Place Order
 
-  const fetchCoupons = async () => {
-    try {
-      // Get user-specific available coupons
-      const response = await api.get('/coupons/user/available');
-      setCoupons(response.data.data.coupons);
-    } catch (err) {
-      console.error('Failed to fetch coupons', err);
-    }
-  };
+**Endpoint:** `POST /api/orders`
 
-  return (
-    <div className="coupons">
-      <h2>Available Coupons</h2>
-      {coupons.map((coupon) => (
-        <div key={coupon.id} className="coupon-card">
-          <h3>{coupon.code}</h3>
-          <p>
-            {coupon.discountType === 'PERCENTAGE'
-              ? `${coupon.discountValue}% OFF`
-              : `₹${coupon.discountValue} OFF`}
-          </p>
-          {coupon.minPurchase && (
-            <p>Min purchase: ₹{coupon.minPurchase}</p>
-          )}
-          {coupon.maxDiscount && (
-            <p>Max discount: ₹{coupon.maxDiscount}</p>
-          )}
-          <p>
-            Valid until: {new Date(coupon.validTo).toLocaleDateString()}
-          </p>
-          {coupon.usageLimitPerUser && (
-            <p>
-              Remaining uses: {coupon.remainingUsesForUser}
-            </p>
-          )}
-          <button onClick={() => navigator.clipboard.writeText(coupon.code)}>
-            Copy Code
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
+**What to send:**
+- Same as calculate: coupon code, wallet points
 
-export default Coupons;
-```
+**What you'll receive:**
+- Order ID
+- Final amount to pay
+- Payment status: PENDING
+- Order status: PENDING
+
+**What happens in backend:**
+- Stock is DEDUCTED
+- Wallet points DEDUCTED
+- Coupon usage COUNTED
+- Order created with PENDING status
+
+**Frontend actions:**
+1. User clicks "Place Order"
+2. Create order on backend
+3. Immediately open payment gateway
+4. Don't redirect yet - payment pending
+
+---
+
+### Step 9: Payment (Razorpay/Stripe)
+
+**Payment Success Flow:**
+1. User completes payment on Razorpay
+2. Razorpay returns success response
+3. **Frontend calls:** `PATCH /api/orders/:orderId/payment` with `paymentStatus: "SUCCESS"`
+4. Backend updates order to CONFIRMED
+5. Frontend redirects to "Order Confirmed" page
+
+**Payment Failure Flow:**
+1. User cancels or payment fails
+2. **Frontend calls:** `PATCH /api/orders/:orderId/payment` with `paymentStatus: "FAILED"`
+3. Backend automatically:
+   - Restores stock
+   - Restores wallet points
+   - Restores coupon usage
+   - Sets order status to CANCELLED
+4. Frontend shows "Payment Failed" message
+
+**Important:**
+- Backend trusts frontend's payment status
+- Frontend MUST call the update API in both cases
+- Never leave order in PENDING state
+
+---
+
+### Step 10: View Orders
+
+**Endpoints:**
+- `GET /api/orders` - All user's orders
+- `GET /api/orders?status=PENDING` - Filter by status
+- `GET /api/orders/:orderId` - Single order details
+
+**What you'll receive:**
+- Order ID
+- Order date
+- Total amount
+- Discounts applied
+- Final amount paid
+- Payment status
+- Order status (PENDING, CONFIRMED, DELIVERED, etc.)
+- List of items
+
+**Frontend pages:**
+- Orders page / Order history
+- Show all orders
+- Filter by status
+- Click to view details
+- Track order status
+
+---
+
+### Step 11: View Profile & Wallet
+
+**Endpoints:**
+- `GET /api/users/profile` - User details
+- `GET /api/users/wallet` - Wallet points
+
+**What you'll receive:**
+- Profile: name, email, wallet points, join date
+- Wallet: current points balance
+
+**Frontend pages:**
+- Profile page
+- Wallet page
+- Show wallet balance in header/navbar
+
+---
+
+## Seller Journey
+
+### Step 1: Seller Dashboard
+
+**Endpoint:** `GET /api/products`
+
+**What you'll receive:**
+- All products created by this seller
+- Product details, stock, status
+
+**Frontend pages:**
+- Seller dashboard
+- List all products
+- Show stock levels
+- Edit/Delete buttons
+
+---
+
+### Step 2: Add Product
+
+**Endpoint:** `POST /api/products`
+
+**What to send:**
+- Product name
+- Description
+- Price
+- Stock quantity
+
+**What happens:**
+- Product stored in lowercase
+- Displayed in Title Case
+- Multiple sellers can have same product name
+
+**Frontend pages:**
+- "Add Product" form
+- Fields: name, description, price, stock
+- Submit button
+
+---
+
+### Step 3: Update Product
+
+**Endpoint:** `PUT /api/products/:productId`
+
+**What to send:**
+- Updated name, description, price, stock
+
+**Frontend pages:**
+- Edit product page
+- Pre-filled form with current values
+
+---
+
+### Step 4: Update Stock Only
+
+**Endpoint:** `PATCH /api/products/:productId/stock`
+
+**What to send:**
+- New stock quantity
+
+**Frontend actions:**
+- Quick stock update input on product list
+- No need to open full edit form
+
+---
+
+### Step 5: Delete Product (Soft Delete)
+
+**Endpoint:** `DELETE /api/products/:productId`
+
+**What happens:**
+- Product not deleted from database
+- `isActive` set to false
+- Product hidden from public listings
+- Order history preserved
+
+**Frontend actions:**
+- Confirmation dialog
+- Remove from seller's product list
+- Can add "Restore" feature later
 
 ---
 
 ## Payment Integration
 
-### 1. Checkout Flow
+### Razorpay Integration Flow
 
-**Component: `Checkout.jsx`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
-import useRazorpay from 'react-razorpay';
+**1. Order Placement**
+- User places order
+- Backend creates PENDING order
+- Frontend receives orderId and finalAmount
 
-function Checkout() {
-  const [Razorpay] = useRazorpay();
-  const [couponCode, setCouponCode] = useState('');
-  const [useWallet, setUseWallet] = useState(false);
-  const [walletPoints, setWalletPoints] = useState(0);
-  const [orderPreview, setOrderPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
+**2. Initialize Razorpay**
+- Frontend loads Razorpay SDK
+- Create Razorpay instance with:
+  - API key
+  - Amount (in paise: finalAmount × 100)
+  - Order ID
+  - Success handler
+  - Failure handler
 
-  useEffect(() => {
-    fetchWalletPoints();
-  }, []);
+**3. Payment Success Handler**
+- Razorpay calls your success callback
+- Frontend calls: `PATCH /api/orders/:orderId/payment { paymentStatus: "SUCCESS" }`
+- Show success message
+- Redirect to orders page
 
-  const fetchWalletPoints = async () => {
-    try {
-      const response = await api.get('/users/wallet');
-      setWalletPoints(response.data.data.walletPoints);
-    } catch (err) {
-      console.error('Failed to fetch wallet points');
-    }
-  };
+**4. Payment Failure Handler**
+- User cancels or payment fails
+- Frontend calls: `PATCH /api/orders/:orderId/payment { paymentStatus: "FAILED" }`
+- Backend restores everything
+- Show failure message
 
-  // Calculate order with discounts
-  const calculateOrder = async () => {
-    setLoading(true);
-    try {
-      const response = await api.post('/orders/calculate', {
-        couponCode: couponCode || undefined,
-        useWalletPoints: useWallet,
-        walletPointsToUse: useWallet ? walletPoints : 0
-      });
-      setOrderPreview(response.data.data.breakdown);
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to calculate order');
-    } finally {
-      setLoading(false);
-    }
-  };
+**5. Important Notes**
+- Frontend controls payment gateway
+- Backend trusts frontend's status update
+- Backend handles all rollback logic
+- For production: Add signature verification
 
-  // Place order and initiate payment
-  const handleCheckout = async () => {
-    setLoading(true);
+---
 
-    try {
-      // Step 1: Place order (creates PENDING order, stock deducted)
-      const orderResponse = await api.post('/orders', {
-        couponCode: couponCode || undefined,
-        useWalletPoints: useWallet,
-        walletPointsToUse: useWallet ? walletPoints : 0
-      });
+## API Integration Patterns
 
-      const { orderId, finalAmount } = orderResponse.data.data.order;
+### 1. Making API Calls
 
-      // Step 2: Initiate Razorpay payment
-      const options = {
-        key: process.env.REACT_APP_RAZORPAY_KEY,
-        amount: finalAmount * 100, // Convert to paise
-        currency: 'INR',
-        name: 'My E-Commerce Store',
-        description: `Order #${orderId}`,
-        order_id: orderId,
+**Setup:**
+- Create axios instance with base URL
+- Add interceptor to inject JWT token automatically
+- Add interceptor to handle 401 errors globally
 
-        // Payment success callback
-        handler: async function (response) {
-          try {
-            // Update payment status to SUCCESS
-            await api.patch(`/orders/${orderId}/payment`, {
-              paymentStatus: 'SUCCESS'
-            });
-
-            alert('Payment successful! Order confirmed.');
-            window.location.href = '/orders';
-          } catch (err) {
-            alert('Payment succeeded but failed to update order status');
-          }
-        },
-
-        // Payment modal dismissed/cancelled
-        modal: {
-          ondismiss: async function () {
-            try {
-              // Update payment status to FAILED (triggers rollback)
-              await api.patch(`/orders/${orderId}/payment`, {
-                paymentStatus: 'FAILED'
-              });
-
-              alert('Payment cancelled. Stock and wallet points restored.');
-            } catch (err) {
-              console.error('Failed to update payment status');
-            }
-          }
-        },
-
-        theme: {
-          color: '#3399cc'
-        }
-      };
-
-      const razorpay = new Razorpay(options);
-      razorpay.open();
-
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to place order');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="checkout">
-      <h2>Checkout</h2>
-
-      {/* Coupon Input */}
-      <div className="coupon-section">
-        <input
-          type="text"
-          placeholder="Enter coupon code"
-          value={couponCode}
-          onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-        />
-      </div>
-
-      {/* Wallet Points */}
-      <div className="wallet-section">
-        <label>
-          <input
-            type="checkbox"
-            checked={useWallet}
-            onChange={(e) => setUseWallet(e.target.checked)}
-          />
-          Use wallet points (₹{walletPoints} available)
-        </label>
-      </div>
-
-      {/* Calculate Button */}
-      <button onClick={calculateOrder} disabled={loading}>
-        Calculate Total
-      </button>
-
-      {/* Order Preview */}
-      {orderPreview && (
-        <div className="order-preview">
-          <h3>Order Summary</h3>
-          <p>Subtotal: ₹{orderPreview.subtotal}</p>
-          {orderPreview.couponDiscount > 0 && (
-            <p className="discount">
-              Coupon Discount: -₹{orderPreview.couponDiscount}
-            </p>
-          )}
-          {orderPreview.walletPointsUsed > 0 && (
-            <p className="discount">
-              Wallet Points Used: -₹{orderPreview.walletPointsUsed}
-            </p>
-          )}
-          <h3>Final Amount: ₹{orderPreview.finalAmount}</h3>
-
-          <button onClick={handleCheckout} disabled={loading}>
-            {loading ? 'Processing...' : 'Pay Now'}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default Checkout;
+**Pattern:**
 ```
-
-### 2. Order History
-
-**Component: `Orders.jsx`**
-```javascript
-import { useState, useEffect } from 'react';
-import api from '../utils/api';
-
-function Orders() {
-  const [orders, setOrders] = useState([]);
-  const [filter, setFilter] = useState(''); // PENDING, CONFIRMED, etc.
-
-  useEffect(() => {
-    fetchOrders();
-  }, [filter]);
-
-  const fetchOrders = async () => {
-    try {
-      const params = filter ? { status: filter } : {};
-      const response = await api.get('/orders', { params });
-      setOrders(response.data.data.orders);
-    } catch (err) {
-      console.error('Failed to fetch orders', err);
-    }
-  };
-
-  const getOrderDetails = async (orderId) => {
-    try {
-      const response = await api.get(`/orders/${orderId}`);
-      console.log('Order details:', response.data.data.order);
-      // Show in modal or navigate to details page
-    } catch (err) {
-      alert('Failed to fetch order details');
-    }
-  };
-
-  return (
-    <div className="orders">
-      <h2>My Orders</h2>
-
-      {/* Filter */}
-      <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-        <option value="">All Orders</option>
-        <option value="PENDING">Pending</option>
-        <option value="CONFIRMED">Confirmed</option>
-        <option value="DELIVERED">Delivered</option>
-        <option value="CANCELLED">Cancelled</option>
-      </select>
-
-      {/* Orders List */}
-      {orders.map((order) => (
-        <div key={order.id} className="order-item">
-          <h3>Order #{order.id.slice(0, 8)}</h3>
-          <p>Date: {new Date(order.createdAt).toLocaleDateString()}</p>
-          <p>Total: ₹{order.totalAmount}</p>
-          {order.couponDiscount > 0 && (
-            <p>Discount: -₹{order.couponDiscount}</p>
-          )}
-          <p>Final Amount: ₹{order.finalAmount}</p>
-          <p>Payment: {order.paymentStatus}</p>
-          <p>Status: {order.orderStatus}</p>
-
-          <button onClick={() => getOrderDetails(order.id)}>
-            View Details
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default Orders;
+1. User action (click button)
+2. Show loading state
+3. Call API
+4. Handle success → Update UI
+5. Handle error → Show error message
+6. Hide loading state
 ```
 
 ---
 
-## Error Handling
+### 2. State Management
 
-### Global Error Handler
+**User State:**
+- Store: token, user profile, cart count
+- Update on: login, logout, cart changes
 
-**Component: `ErrorBoundary.jsx`**
-```javascript
-import React from 'react';
+**Product State:**
+- Store: products list, filters, pagination
+- Update on: search, filter change, page change
 
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+**Cart State:**
+- Store: cart items, total
+- Update on: add, remove, update quantity
 
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
+**Order State:**
+- Store: orders list, current order
+- Update on: place order, payment status change
 
-  componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
-  }
+---
 
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="error-page">
-          <h1>Something went wrong</h1>
-          <p>{this.state.error?.message}</p>
-          <button onClick={() => window.location.reload()}>
-            Reload Page
-          </button>
-        </div>
-      );
-    }
+### 3. Route Protection
 
-    return this.props.children;
-  }
-}
+**Public Routes:**
+- Home, Product List, Product Details
+- Login, Register
+- Public coupons
 
-export default ErrorBoundary;
+**User-Only Routes:**
+- Cart, Checkout, Orders
+- Profile, Wallet
+- User coupons
+
+**Seller-Only Routes:**
+- Seller Dashboard
+- Add/Edit Product
+- Manage Products
+
+**Implementation:**
+- Check for token in localStorage
+- Redirect to login if not found
+- Check user type for seller routes
+
+---
+
+### 4. Automatic Token Refresh
+
+**Pattern:**
+- Intercept 401 responses
+- Clear token
+- Redirect to login
+- Show "Session expired" message
+
+---
+
+### 5. Loading States
+
+**Show loading for:**
+- Login/Register
+- Fetching products
+- Adding to cart
+- Placing order
+- Payment processing
+- Fetching orders
+
+**UI Elements:**
+- Spinners
+- Skeleton screens
+- Disabled buttons
+- Progress bars
+
+---
+
+### 6. Error Handling
+
+**Types of Errors:**
+
+**400 - Bad Request**
+- Invalid input
+- Validation failed
+- Show specific error message
+
+**401 - Unauthorized**
+- Token expired/invalid
+- Redirect to login
+
+**403 - Forbidden**
+- Wrong user type (user accessing seller routes)
+- Show "Access denied"
+
+**404 - Not Found**
+- Product not found
+- Order not found
+- Show "Not found" page
+
+**409 - Conflict**
+- Email already exists
+- Show specific error
+
+**500 - Server Error**
+- Something went wrong
+- Show generic error
+- Log for debugging
+
+---
+
+### 7. Notifications/Toasts
+
+**Show for:**
+- Login success
+- Product added to cart
+- Order placed
+- Payment success/failure
+- Product created/updated
+- Errors
+
+---
+
+## Error Handling Strategy
+
+### 1. Global Error Handler
+
+**Setup:**
+- Axios response interceptor
+- Catch all API errors
+- Show user-friendly messages
+- Log errors to console/service
+
+---
+
+### 2. Network Errors
+
+**When API is down:**
+- Show "Network error" message
+- Provide retry button
+- Show cached data if available
+
+---
+
+### 3. Validation Errors
+
+**Before API call:**
+- Validate on frontend (email format, required fields)
+- Show inline errors
+
+**From API (400):**
+- Show backend error messages
+- Highlight specific fields
+
+---
+
+### 4. Session Management
+
+**Token expiry:**
+- Detect 401 errors
+- Clear local storage
+- Redirect to login
+- Show "Please login again"
+
+---
+
+## Complete User Shopping Flow
+
 ```
+1. Browse Products
+   ↓ GET /api/products/all
 
-### API Error Handler Utility
+2. View Product Details
+   ↓ GET /api/products/public/:id
 
-**`utils/errorHandler.js`**
-```javascript
-export const handleApiError = (error) => {
-  if (error.response) {
-    // Server responded with error
-    const message = error.response.data?.message || 'An error occurred';
-    const status = error.response.status;
+3. Add to Cart (Login required)
+   ↓ POST /api/cart
 
-    switch (status) {
-      case 400:
-        return { message: `Bad Request: ${message}`, type: 'warning' };
-      case 401:
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-        return { message: 'Session expired. Please login again.', type: 'error' };
-      case 403:
-        return { message: 'You do not have permission to perform this action.', type: 'error' };
-      case 404:
-        return { message: 'Resource not found.', type: 'warning' };
-      case 409:
-        return { message: message, type: 'warning' };
-      case 500:
-        return { message: 'Server error. Please try again later.', type: 'error' };
-      default:
-        return { message: message, type: 'error' };
-    }
-  } else if (error.request) {
-    // Request made but no response
-    return {
-      message: 'Network error. Please check your connection.',
-      type: 'error'
-    };
-  } else {
-    // Something else happened
-    return { message: error.message, type: 'error' };
-  }
-};
-```
+4. View Cart
+   ↓ GET /api/cart
 
-**Usage:**
-```javascript
-import { handleApiError } from '../utils/errorHandler';
+5. View Available Coupons
+   ↓ GET /api/coupons/user/available
 
-try {
-  await api.post('/cart', { productId, quantity });
-} catch (err) {
-  const { message, type } = handleApiError(err);
-  showNotification(message, type); // Your notification system
-}
+6. Go to Checkout
+   ↓ Enter coupon, select wallet points
+
+7. Calculate Order Preview
+   ↓ POST /api/orders/calculate
+   (Shows final amount, no changes to DB)
+
+8. Place Order
+   ↓ POST /api/orders
+   (Stock deducted, order status: PENDING)
+
+9. Payment Gateway Opens
+   ↓ User pays via Razorpay/Stripe
+
+10a. Payment Success
+   ↓ PATCH /api/orders/:id/payment {status: "SUCCESS"}
+   → Order confirmed
+   → Redirect to orders page
+
+10b. Payment Failure
+   ↓ PATCH /api/orders/:id/payment {status: "FAILED"}
+   → Stock restored
+   → Wallet restored
+   → Coupon restored
+   → Show error message
+
+11. View Order History
+   ↓ GET /api/orders
 ```
 
 ---
 
-## Complete Flow Example
+## Complete Seller Flow
 
-### User Shopping Journey
+```
+1. Register/Login as Seller
+   ↓ POST /api/sellers/register or /login
 
-```javascript
-// 1. User browses products
-<ProductList />
-  ↓
-// 2. Adds items to cart
-POST /api/cart { productId, quantity }
-  ↓
-// 3. Views cart
-GET /api/cart
-  ↓
-// 4. Views available coupons
-GET /api/coupons/user/available
-  ↓
-// 5. Goes to checkout, applies coupon
-POST /api/orders/calculate { couponCode, useWalletPoints }
-  ↓
-// 6. Places order (stock deducted, status: PENDING)
-POST /api/orders { couponCode, useWalletPoints }
-  ↓
-// 7. Razorpay payment modal opens
-  ↓
-// 8a. Payment SUCCESS
-PATCH /api/orders/:id/payment { paymentStatus: "SUCCESS" }
-// Order confirmed, redirect to /orders
-  ↓
-// 8b. Payment FAILED
-PATCH /api/orders/:id/payment { paymentStatus: "FAILED" }
-// Stock restored, wallet restored, coupon restored
-  ↓
-// 9. View order history
-GET /api/orders
-GET /api/orders/:id (for details)
+2. View Dashboard
+   ↓ GET /api/products
+   (Shows all seller's products)
+
+3. Add New Product
+   ↓ POST /api/products
+
+4. Update Product
+   ↓ PUT /api/products/:id
+
+5. Update Stock
+   ↓ PATCH /api/products/:id/stock
+
+6. Delete Product (Soft)
+   ↓ DELETE /api/products/:id
+   (Sets isActive = false)
 ```
 
 ---
 
-## Testing
+## Pages You Need to Build
 
-### Sample Test Data
+### Public Pages
+1. **Home** - Featured products
+2. **Product List** - All products with search/filter
+3. **Product Details** - Single product view
+4. **Login** - User/Seller login
+5. **Register** - User/Seller registration
 
-```javascript
-// User credentials
+### User Pages (Authenticated)
+6. **Cart** - Shopping cart
+7. **Checkout** - Order summary with coupon/wallet
+8. **Orders** - Order history
+9. **Order Details** - Single order view
+10. **Profile** - User profile
+11. **Wallet** - Wallet points
+12. **Coupons** - Available coupons
+
+### Seller Pages (Authenticated)
+13. **Seller Dashboard** - Product list
+14. **Add Product** - Create product form
+15. **Edit Product** - Update product form
+
+---
+
+## Key Points to Remember
+
+1. **Authentication**
+   - Store JWT token after login
+   - Send token in Authorization header
+   - Handle 401 errors globally
+
+2. **Cart Management**
+   - Update cart count in navbar
+   - Refresh cart after operations
+   - Clear cart after successful order
+
+3. **Payment Flow**
+   - Order created BEFORE payment
+   - Stock deducted on order creation
+   - Frontend updates payment status
+   - Backend handles rollback on failure
+
+4. **Error Handling**
+   - Show user-friendly messages
+   - Validate before API calls
+   - Handle network errors
+   - Log errors for debugging
+
+5. **Loading States**
+   - Show spinners/loaders
+   - Disable buttons during API calls
+   - Improve user experience
+
+6. **User Experience**
+   - Show success notifications
+   - Confirm destructive actions
+   - Provide clear feedback
+   - Handle edge cases
+
+7. **Security**
+   - Never store sensitive data
+   - Use HTTPS in production
+   - Validate user input
+   - Protect routes based on user type
+
+8. **Performance**
+   - Paginate product lists
+   - Cache user data
+   - Debounce search input
+   - Lazy load images
+
+---
+
+## Testing Checklist
+
+### User Flow
+- [ ] Register new user
+- [ ] Receive welcome bonus
+- [ ] Login
+- [ ] Browse products
+- [ ] Add to cart
+- [ ] Update cart quantity
+- [ ] Remove from cart
+- [ ] Apply coupon
+- [ ] Use wallet points
+- [ ] Place order
+- [ ] Complete payment
+- [ ] View order history
+- [ ] Logout
+
+### Seller Flow
+- [ ] Register seller
+- [ ] Login
+- [ ] Add product
+- [ ] Update product
+- [ ] Update stock
+- [ ] Delete product
+- [ ] View product list
+
+### Error Cases
+- [ ] Invalid login
+- [ ] Expired token
+- [ ] Out of stock
+- [ ] Invalid coupon
+- [ ] Insufficient wallet
+- [ ] Payment failure
+- [ ] Network error
+
+---
+
+## API Response Format
+
+All responses follow this structure:
+
+**Success:**
+```json
 {
-  email: "test@example.com",
-  password: "password123",
-  name: "Test User"
+  "success": true,
+  "message": "Operation successful",
+  "data": { ... }
 }
+```
 
-// Seller credentials
+**Error:**
+```json
 {
-  email: "seller@example.com",
-  password: "password123",
-  name: "Test Seller",
-  shopName: "My Shop"
+  "success": false,
+  "message": "Error description",
+  "error": "Detailed error (dev only)"
 }
-
-// Product data
-{
-  name: "iPhone 15 Pro",
-  description: "Latest Apple smartphone",
-  price: 999.99,
-  stock: 50
-}
-
-// Coupon code (auto-created on first user registration)
-"WELCOME10"
 ```
 
 ---
 
 ## Summary
 
-**Key Points:**
-1. Use axios interceptors for automatic token injection
-2. Handle 401 errors globally to redirect to login
-3. Store JWT token in localStorage
-4. Frontend handles Razorpay integration, backend updates status
-5. Always show loading states and error messages
-6. Use try-catch for all API calls
-7. Validate user input before sending to API
-8. Clear cart after successful order
-9. Refresh data after mutations (add, update, delete)
+Your e-commerce API is **fully ready for frontend integration**. The key workflow is:
 
-Your API is ready for integration! All endpoints follow RESTful conventions and return consistent JSON responses.
+1. **User authenticates** → Receives JWT token
+2. **Browses products** → Public endpoint, no auth
+3. **Manages cart** → Authenticated, real-time updates
+4. **Applies discounts** → Coupons + wallet points
+5. **Places order** → Creates PENDING order, deducts stock
+6. **Pays via gateway** → Frontend manages payment UI
+7. **Updates status** → Frontend tells backend SUCCESS/FAILED
+8. **Backend handles logic** → Confirms or rolls back
+
+All endpoints return consistent JSON, handle errors gracefully, and follow REST conventions. Your frontend team can start integration immediately!
